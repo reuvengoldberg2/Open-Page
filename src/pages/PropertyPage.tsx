@@ -39,12 +39,13 @@ export default function PropertyPage() {
   const [currentImage, setCurrentImage] = useState(0);
   const [copied, setCopied] = useState(false);
   const [notFound, setNotFound] = useState(false);
+  const [dbError, setDbError] = useState<string | undefined>();
 
   useEffect(() => {
     if (!id) { setNotFound(true); return; }
-    getProperty(id).then((p) => {
+    getProperty(id).then(({ property: p, error }) => {
       if (p) setProperty(p);
-      else setNotFound(true);
+      else { setDbError(error); setNotFound(true); }
     });
   }, [id]);
 
@@ -67,6 +68,11 @@ export default function PropertyPage() {
         </div>
         <h1 className="text-2xl font-bold">Listing not found</h1>
         <p className="text-muted-foreground">This property page doesn't exist or has been removed.</p>
+        {dbError && (
+          <p className="text-xs text-red-500 font-mono bg-red-50 px-3 py-2 rounded-lg max-w-sm break-all">
+            {dbError}
+          </p>
+        )}
         <Button onClick={() => navigate("/")} className="gap-2 mt-2">
           <Home className="w-4 h-4" />
           Go home

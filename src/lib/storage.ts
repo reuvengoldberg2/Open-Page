@@ -69,15 +69,20 @@ export async function saveProperty(
   return id;
 }
 
-export async function getProperty(id: string): Promise<PropertyDetails | null> {
+export async function getProperty(id: string): Promise<{ property: PropertyDetails | null; error?: string }> {
   const { data, error } = await supabase
     .from("properties")
     .select("*")
     .eq("id", id)
     .single();
 
-  if (error || !data) return null;
-  return rowToProperty(data);
+  if (error) {
+    const msg = `${error.code}: ${error.message}`;
+    console.error("[getProperty] Supabase error:", msg, error.details);
+    return { property: null, error: msg };
+  }
+  if (!data) return { property: null, error: "No data returned" };
+  return { property: rowToProperty(data) };
 }
 
 export async function getAllProperties(): Promise<PropertyDetails[]> {
