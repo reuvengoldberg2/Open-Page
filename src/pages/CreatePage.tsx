@@ -112,7 +112,7 @@ export default function CreatePage() {
         images,
       });
 
-      const id = saveProperty({
+      const id = await saveProperty({
         ...form,
         images,
         title,

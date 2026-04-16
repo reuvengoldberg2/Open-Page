@@ -1,44 +1,95 @@
+import { supabase } from "@/lib/supabase";
 import type { PropertyDetails, PropertyFormData } from "@/types/property";
 
-const STORAGE_KEY = "propertypage_listings";
+async function uploadImage(base64: string, propertyId: string, index: number): Promise<string> {
+  const res = await fetch(base64);
+  const blob = await res.blob();
+  const ext = blob.type.split("/")[1] || "jpg";
+  const path = `${propertyId}/${index}.${ext}`;
 
-function getAll(): Record<string, PropertyDetails> {
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}");
-  } catch {
-    return {};
-  }
+  const { error } = await supabase.storage
+    .from("property-images")
+    .upload(path, blob, { contentType: blob.type, upsert: true });
+
+  if (error) throw new Error(`Image upload failed: ${error.message}`);
+
+  const { data } = supabase.storage.from("property-images").getPublicUrl(path);
+  return data.publicUrl;
 }
 
-export function saveProperty(
-  data: PropertyFormData & { images: string[]; title: string; description: string }
-): string {
-  const id = crypto.randomUUID();
-  const property: PropertyDetails = {
-    ...data,
-    id,
-    createdAt: new Date().toISOString(),
+function rowToProperty(row: Record<string, unknown>): PropertyDetails {
+  return {
+    id: row.id as string,
+    title: row.title as string,
+    description: row.description as string,
+    price: (row.price as string) ?? "",
+    address: (row.address as string) ?? "",
+    city: (row.city as string) ?? "",
+    bedrooms: (row.bedrooms as string) ?? "",
+    bathrooms: (row.bathrooms as string) ?? "",
+    area: (row.area as string) ?? "",
+    propertyType: (row.property_type as string) ?? "House",
+    features: (row.features as string[]) ?? [],
+    images: (row.image_urls as string[]) ?? [],
+    agentName: (row.agent_name as string) ?? "",
+    agentPhone: (row.agent_phone as string) ?? "",
+    agentEmail: (row.agent_email as string) ?? "",
+    createdAt: row.created_at as string,
   };
+}
 
-  const all = getAll();
-  all[id] = property;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
+export async function saveProperty(
+  data: PropertyFormData & { images: string[]; title: string; description: string }
+): Promise<string> {
+  const id = crypto.randomUUID();
+
+  const imageUrls = await Promise.all(
+    data.images.map((img, i) => uploadImage(img, id, i))
+  );
+
+  const { error } = await supabase.from("properties").insert({
+    id,
+    title: data.title,
+    description: data.description,
+    price: data.price,
+    address: data.address,
+    city: data.city,
+    bedrooms: data.bedrooms,
+    bathrooms: data.bathrooms,
+    area: data.area,
+    property_type: data.propertyType,
+    features: data.features,
+    image_urls: imageUrls,
+    agent_name: data.agentName,
+    agent_phone: data.agentPhone,
+    agent_email: data.agentEmail,
+  });
+
+  if (error) throw new Error(`Failed to save property: ${error.message}`);
   return id;
 }
 
-export function getProperty(id: string): PropertyDetails | null {
-  const all = getAll();
-  return all[id] ?? null;
+export async function getProperty(id: string): Promise<PropertyDetails | null> {
+  const { data, error } = await supabase
+    .from("properties")
+    .select("*")
+    .eq("id", id)
+    .single();
+
+  if (error || !data) return null;
+  return rowToProperty(data);
 }
 
-export function getAllProperties(): PropertyDetails[] {
-  return Object.values(getAll()).sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  );
+export async function getAllProperties(): Promise<PropertyDetails[]> {
+  const { data, error } = await supabase
+    .from("properties")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error || !data) return [];
+  return data.map(rowToProperty);
 }
 
-export function deleteProperty(id: string): void {
-  const all = getAll();
-  delete all[id];
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
+export async function deleteProperty(id: string): Promise<void> {
+  await supabase.from("properties").delete().eq("id", id);
 }

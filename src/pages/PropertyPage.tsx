@@ -42,9 +42,10 @@ export default function PropertyPage() {
 
   useEffect(() => {
     if (!id) { setNotFound(true); return; }
-    const p = getProperty(id);
-    if (p) setProperty(p);
-    else setNotFound(true);
+    getProperty(id).then((p) => {
+      if (p) setProperty(p);
+      else setNotFound(true);
+    });
   }, [id]);
 
   const handleShare = async () => {
